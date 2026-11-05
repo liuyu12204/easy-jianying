@@ -1,6 +1,6 @@
 # 它是怎么做到的
 
-剪映（macOS 专业版）的一个草稿就是 `~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft/<名字>/` 下的一个文件夹（CapCut 在 `~/Movies/CapCut/User Data/...`）。jyr 做的事情只有一件：**按剪映自己的格式把这个文件夹写出来，登记到首页**。打开、编辑、导出都在剪映里完成。
+剪映（macOS 专业版）的一个草稿就是 `~/Movies/JianyingPro/User Data/Projects/com.lveditor.draft/<名字>/` 下的一个文件夹（CapCut 在 `~/Movies/CapCut/User Data/...`）。Windows 上索引固定在 `%LOCALAPPDATA%\JianyingPro\User Data\Projects\com.lveditor.draft\root_meta_info.json`，草稿文件夹本体在剪映设置里的"草稿位置"（默认就是同一个目录；改过位置的，索引里每条记录的 `draft_root_path` 都指着它，jyr 按最近的记录放）。jyr 做的事情只有一件：**按剪映自己的格式把这个文件夹写出来，登记到首页**。打开、编辑、导出都在剪映里完成。
 
 ## 1. 格式：向剪映自己学
 
@@ -21,7 +21,7 @@
 
 ## 2. 写文件：普通 JSON
 
-`draft_info.json`（时间线）、`draft_meta_info.json`（素材表、文件夹信息）等都按普通 JSON 写出。实测剪映 11.7 能直接打开、播放、编辑、导出；剪映保存后会按它自己的格式存，jyr 不再读这些文件——要改就改计划重新生成，或者在剪映里改。
+`draft_info.json`（时间线；Windows 上同时写一份 `draft_content.json`，剪映 Windows 版认这个名字）、`draft_meta_info.json`（素材表、文件夹信息）等都按普通 JSON 写出。实测剪映 11.7 能直接打开、播放、编辑、导出；剪映保存后会按它自己的格式存（Windows 上会加密），jyr 不再读这些文件——要改就改计划重新生成，或者在剪映里改。
 
 ## 3. 资源：免费的默认用，会员的声明了才用
 
@@ -37,13 +37,13 @@
 
 jyr 只需要知道一件跟版本有关的事：这个版本的剪映写什么样的时间线版本号（`new_version`，11.5 → 187.0.0，11.6 / 11.7 → 189.0.0）。
 
-`jyr doctor` 从剪映安装包的 Info.plist 读版本号。遇到表里没有的新版本，`jyr adapt` 先按已知最新的时间线版本号走，存进 `~/.jyr/profiles.json`；生成一份草稿在剪映里打开确认就行。
+`jyr doctor` 读剪映的版本号（macOS 看安装包的 Info.plist，Windows 看安装目录里的版本子目录，找不到再问注册表，`11.7.0.14652` 归一成 `11.7.0`）。遇到表里没有的新版本，`jyr adapt` 先按已知最新的时间线版本号走，存进 `~/.jyr/profiles.json`；生成一份草稿在剪映里打开确认就行。
 
 ## 5. CapCut 国际版
 
 CapCut 和剪映用同一种草稿格式（`version 360000`），而且 CapCut 自己存的草稿也是普通 JSON。所以 CapCut 一侧既能写也能读：
 
-- **认 App**：`runtime.App` 记着两家的 bundle id、数据目录、进程名、`platform.app_id/app_source`（剪映 3704 / `lv`，CapCut 359289 / `cc`）。`--app capcut`、`JYR_TARGET`、`JYR_APP` 指向谁就用谁；只装一个就用它。
+- **认 App**：`runtime.App` 记着两家的 bundle id、数据目录、进程名、`platform.app_id/app_source`（剪映 3704 / `lv`，CapCut 359289 / `cc`）。Windows 上按卸载注册表和安装目录认（`JianyingPro.exe` / `CapCut.exe`）。`--app capcut`、`JYR_TARGET`、`JYR_APP` 指向谁就用谁；只装一个就用它。
 - **时间线版本号**：从 CapCut 自己存的草稿里读——只认 `last_modified_platform` 的版本与本机 CapCut 相同、`app_source` 为 `cc` 的，取最大的 `new_version`（9.4.1 → 185.0.0）。
 - **写**：字段和剪映完全相同，只换 `platform` 与 `new_version`；首页索引 `root_meta_info.json` 字段也相同，推送前同样要求 CapCut 完全退出、先备份索引。
 - **读**：`inspect` / `srt` / `edit` 直接读 JSON。

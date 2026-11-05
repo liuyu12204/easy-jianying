@@ -64,7 +64,9 @@ jyr writes ordinary JSON draft files; the apps open, edit, save and render them 
 | App | Tested | Create drafts | Read / SRT / edit a copy |
 |---|---|:---:|:---:|
 | JianYing Pro (macOS) | 11.7.0 | ✅ | only drafts jyr built that JianYing has not saved yet |
+| JianYing Pro (Windows) | 11.7.0 | ✅ | only drafts jyr built that JianYing has not saved yet |
 | CapCut (macOS) | 9.4.1 | ✅ | ✅ (CapCut drafts are plain JSON) |
+| CapCut (Windows) | 9.1.0 | ✅ | ✅ (CapCut drafts are plain JSON) |
 
 Other versions are untested. After a JianYing update run `jyr adapt`, then open one built draft to confirm.
 
@@ -84,7 +86,7 @@ CapCut's resource IDs only partly match JianYing's, so it has its own list. Buil
 
 ## Quick start
 
-macOS + JianYing Pro (or CapCut), Python 3.10+, ffmpeg.
+macOS or Windows + JianYing Pro (or CapCut), Python 3.10+, ffmpeg.
 
 ```bash
 git clone https://github.com/YeJe-cpu/easy-jianying && cd easy-jianying
@@ -106,7 +108,7 @@ Quit JianYing before publishing; the new draft appears first on its home screen.
 
 ## Limits
 
-macOS only: tested on an Intel Mac with JianYing 11.7 and CapCut 9.4.1. Apple Silicon should work but hasn't been tested; Windows is untested. jyr only writes draft files and never operates the apps' UI — opening, editing and rendering happen in the app. jyr does not read drafts JianYing has saved (CapCut drafts it can read). Only free resources are used unless you declare membership with `--member`; JianYing's membership rules apply either way. Whether CapCut downloads a missing effect by ID, as JianYing does, has not been checked on another machine yet. Not yet supported: crop, chroma key, color grading, curve speed, styled text and audio effects. **Unofficial; not affiliated with ByteDance.** JianYing's / CapCut's terms of use apply.
+macOS and Windows: tested on an Intel Mac with JianYing 11.7 and CapCut 9.4.1, and on Windows with JianYing 11.7 and CapCut 9.1.0. Apple Silicon should work but hasn't been tested. jyr only writes draft files and never operates the apps' UI — opening, editing and rendering happen in the app. jyr does not read drafts JianYing has saved (CapCut drafts it can read). Only free resources are used unless you declare membership with `--member`; JianYing's membership rules apply either way. Whether CapCut downloads a missing effect by ID, as JianYing does, has not been checked on another machine yet. Not yet supported: crop, chroma key, color grading, curve speed, styled text and audio effects. **Unofficial; not affiliated with ByteDance.** JianYing's / CapCut's terms of use apply.
 
 ## Credits
 

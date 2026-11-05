@@ -7,13 +7,14 @@ schema version (both taken from the Runtime) differ.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 from . import files
 from .draft import Draft
-from .runtime import Runtime
+from .runtime import IS_WIN, Runtime
 from .util import JyrError, atomic_write, dump, new_id, now_us
 
 
@@ -97,7 +98,8 @@ def write(rt: Runtime, draft: Draft, folder: Path, pack: bool = False, overwrite
     if folder.exists():
         if not overwrite:
             raise JyrError(f"{folder} already exists")
-        if (folder / "draft_meta_info.json").exists() and folder.parent == rt.draft_root:
+        if (folder / "draft_meta_info.json").exists() and \
+                os.path.normcase(str(folder.parent)) == os.path.normcase(str(rt.folders_dir)):
             raise JyrError(f"refusing to overwrite a draft inside {rt.app.label}'s project folder")
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
@@ -117,8 +119,9 @@ def write(rt: Runtime, draft: Draft, folder: Path, pack: bool = False, overwrite
 
     tl_dir = folder / "Timelines" / draft.id
     for base in (folder, tl_dir):
-        atomic_write(base / "draft_info.json", info_bytes)
-        atomic_write(base / "draft_info.json.bak", info_bytes)
+        for name in files.INFO_NAMES:
+            atomic_write(base / name, info_bytes)
+            atomic_write(base / f"{name}.bak", info_bytes)
     project = {"config": {"color_space": -1, "hdr_vivid": False, "mixed_track_mode_on": False,
                           "render_index_track_mode_on": False, "use_float_render": False},
                "create_time": created, "id": new_id(), "main_timeline_id": draft.id,
@@ -141,7 +144,8 @@ def write(rt: Runtime, draft: Draft, folder: Path, pack: bool = False, overwrite
     atomic_write(folder / "key_value.json", "{}")
     sec = created // 1_000_000
     atomic_write(folder / "draft_settings",
-                 f"[General]\ncloud_last_modify_platform=mac\ndraft_create_time={sec}\ndraft_last_edit_time={sec}\n")
+                 f"[General]\ncloud_last_modify_platform={'windows' if IS_WIN else 'mac'}\n"
+                 f"draft_create_time={sec}\ndraft_last_edit_time={sec}\n")
     (folder / "Resources").mkdir(exist_ok=True)
     _cover(draft, folder / "draft_cover.jpg")
     if (folder / "draft_cover.jpg").exists():
@@ -153,7 +157,7 @@ def write(rt: Runtime, draft: Draft, folder: Path, pack: bool = False, overwrite
 
 
 def read_info(rt: Runtime, folder: Path) -> dict:
-    return files.read_json(rt, Path(folder) / "draft_info.json")
+    return files.read_draft(rt, folder)
 
 
 def read_meta(rt: Runtime, folder: Path) -> dict:

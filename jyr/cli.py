@@ -21,12 +21,16 @@ def cmd_doctor(a) -> int:
     rep = {"target": rt.app.key, "app": str(rt.app_path), "version": rt.version, "build": rt.build,
            "adapted": rt.known, "timeline_version": rt.timeline_version or None, "draft_root": str(rt.draft_root),
            "app_running": runtime.app_running(rt), "draft_files": "plain JSON"}
+    if rt.folders_dir != rt.draft_root:
+        rep["folders_dir"] = str(rt.folders_dir)
     if rt.is_capcut:
-        sample = next(iter(sorted(rt.draft_root.glob("*/draft_info.json"), key=lambda p: -p.stat().st_mtime)), None)
+        drafts = files.draft_files(rt.folders_dir)
+        sample = next(iter(sorted(drafts.items(), key=lambda kv: -kv[1].stat().st_mtime)), None)
         if sample:
+            folder, p = sample
             try:
-                files.read_json(rt, sample)
-                rep["read_check"] = f"ok ({sample.parent.name})"
+                files.read_json(rt, p)
+                rep["read_check"] = f"ok ({folder.name})"
             except (JyrError, ValueError) as e:
                 rep["read_check"] = f"FAILED: {e}"
     else:

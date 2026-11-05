@@ -34,7 +34,7 @@ def probe(path: str) -> MediaInfo:
     if not p.is_file():
         raise JyrError(f"media not found: {path}")
     if not shutil.which("ffprobe"):
-        raise JyrError("ffprobe not found; install ffmpeg (brew install ffmpeg)")
+        raise JyrError("ffprobe not found; install ffmpeg and make sure it is on PATH")
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(p)],
         capture_output=True, text=True,

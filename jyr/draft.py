@@ -400,8 +400,9 @@ class Draft:
         return max((t.end_us for t in self.tracks), default=0)
 
     def to_json(self, platform: dict | None = None) -> dict:
-        plat = platform or self.platform or {"os": "mac", "app_id": 3704, "app_version": self.app_version,
-                                             "app_source": "lv"}
+        from .runtime import IS_WIN
+        plat = platform or self.platform or {"os": "windows" if IS_WIN else "mac", "app_id": 3704,
+                                             "app_version": self.app_version, "app_source": "lv"}
         return {
             "id": self.id,
             "version": DRAFT_FORMAT_VERSION,

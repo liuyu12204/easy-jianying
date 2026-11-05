@@ -24,10 +24,15 @@ SKIP = {".locked", ".backup", "template.tmp", "template-2.tmp", ".jyr.json"}
 
 
 def _info_files(folder: Path, timeline_id: str) -> list[Path]:
-    files = [folder / "draft_info.json", folder / "draft_info.json.bak",
-             folder / "Timelines" / timeline_id / "draft_info.json",
-             folder / "Timelines" / timeline_id / "draft_info.json.bak"]
-    return [f for f in files if f.exists() or f.name == "draft_info.json"]
+    """Every copy of the timeline JSON in the draft (root + Timelines, main + .bak,
+    draft_info.json and — on Windows — draft_content.json), so they stay in sync."""
+    names = files.INFO_NAMES
+    out = []
+    tl_dir = folder / "Timelines" / timeline_id
+    for name in names:
+        out += [folder / name, folder / f"{name}.bak", tl_dir / name, tl_dir / f"{name}.bak"]
+    seen = [f for f in out if f.exists()]
+    return seen or [folder / names[0]]
 
 
 class Session:
@@ -42,7 +47,7 @@ class Session:
         shutil.copytree(self.src, self.work, ignore=lambda d, names: [n for n in names if n in SKIP])
         for tmp in self.work.rglob("template*.tmp"):
             tmp.unlink()  # crash-recovery copies; they would shadow our edit
-        self.info = files.read_json(rt, self.work / "draft_info.json")
+        self.info = files.read_draft(rt, self.work)
         self.meta = files.read_json(rt, self.work / "draft_meta_info.json")
         self.log: list[str] = []
 

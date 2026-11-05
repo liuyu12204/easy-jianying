@@ -3,8 +3,9 @@
 The only version-specific thing jyr needs is the timeline schema
 (draft_info.new_version) the app writes.
 
-- JianYing: read its version from Info.plist; use the newest schema jyr knows.
-  Open one built draft in JianYing to confirm it loads.
+- JianYing: read its version (Info.plist on macOS, the install dir / registry on
+  Windows); use the newest schema jyr knows. Open one built draft in JianYing to
+  confirm it loads.
 - CapCut: its drafts are plain JSON, so read the schema from drafts this exact
   CapCut version saved (create one blank project first if there is none).
 

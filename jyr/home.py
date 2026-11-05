@@ -12,11 +12,19 @@ import shutil
 import time
 from pathlib import Path
 
-from .runtime import CONFIG_DIR, Runtime, app_running, quit_hint
+from . import files
+from .runtime import CONFIG_DIR, IS_WIN, Runtime, app_running, quit_hint
 from .util import JyrError, atomic_write, dump, new_id, now_us
 from .writer import read_meta
 
 INDEX = "root_meta_info.json"
+# The index entry's draft_json_file points at whatever the app calls the timeline file.
+JSON_FILE = "draft_content.json" if IS_WIN else "draft_info.json"
+
+
+def _norm(p) -> str:
+    import os
+    return os.path.normcase(os.path.normpath(str(p)))
 
 
 def backup_index(rt: Runtime) -> Path:
@@ -31,10 +39,10 @@ def backup_index(rt: Runtime) -> Path:
 
 def unique_folder(rt: Runtime, name: str) -> Path:
     safe = name.replace("/", "-").strip() or "jyr-draft"
-    cand = rt.draft_root / safe
+    cand = rt.folders_dir / safe
     n = 2
     while cand.exists():
-        cand = rt.draft_root / f"{safe}({n})"
+        cand = rt.folders_dir / f"{safe}({n})"
         n += 1
     return cand
 
@@ -42,7 +50,7 @@ def unique_folder(rt: Runtime, name: str) -> Path:
 def publish(rt: Runtime, built: Path, name: str | None = None) -> dict:
     """Copy a built draft folder into the app's project root and register it."""
     built = Path(built)
-    if not (built / "draft_info.json").is_file():
+    if files.info_file(built) is None:
         raise JyrError(f"{built} is not a built draft folder")
     if app_running(rt):
         raise JyrError(quit_hint(rt))
@@ -67,8 +75,8 @@ def publish(rt: Runtime, built: Path, name: str | None = None) -> dict:
             "draft_fold_path": str(target), "draft_id": meta["draft_id"], "draft_is_ai_shorts": False,
             "draft_is_cloud_temp_draft": False, "draft_is_infinite_canvas_draft": False,
             "draft_is_invisible": False, "draft_is_pippit_draft": False, "draft_is_web_article_video": False,
-            "draft_json_file": str(target / "draft_info.json"), "draft_name": target.name,
-            "draft_new_version": "", "draft_root_path": str(rt.draft_root),
+            "draft_json_file": str(target / JSON_FILE), "draft_name": target.name,
+            "draft_new_version": "", "draft_root_path": str(rt.folders_dir),
             "draft_timeline_materials_size": meta.get("draft_timeline_materials_size_", 0),
             "draft_type": "", "draft_web_article_video_enter_from": "", "pippit_avatar_url": "",
             "pippit_extra_info": "", "pippit_id": "", "pippit_user_name": "",
@@ -108,15 +116,20 @@ def _fix_paths(rt: Runtime, folder: Path) -> None:
         raw = raw.replace(json.dumps(old, ensure_ascii=False)[1:-1], json.dumps(str(folder), ensure_ascii=False)[1:-1])
     atomic_write(folder / "draft_meta_info.json", raw)
     # Packed media lives inside the draft; point materials at the new place.
-    if old and old != str(folder):
-        info_raw = (folder / "draft_info.json").read_text("utf-8")
+    info_path = files.info_file(folder)
+    if old and old != str(folder) and info_path is not None:
+        info_raw = info_path.read_text("utf-8")
         o = json.dumps(old, ensure_ascii=False)[1:-1]
         if o in info_raw:
             enc = info_raw.replace(o, json.dumps(str(folder), ensure_ascii=False)[1:-1])
             tl = json.loads(info_raw)["id"]
-            for p in (folder / "draft_info.json", folder / "draft_info.json.bak",
-                      folder / "Timelines" / tl / "draft_info.json", folder / "Timelines" / tl / "draft_info.json.bak"):
-                atomic_write(p, enc)
+            tl_dir = folder / "Timelines" / tl
+            paths = []
+            for name in files.READ_NAMES:
+                paths += [folder / name, folder / f"{name}.bak", tl_dir / name, tl_dir / f"{name}.bak"]
+            for p in paths:
+                if p.exists():
+                    atomic_write(p, enc)
 
 
 def trash(rt: Runtime, names: list[str]) -> dict:
@@ -126,8 +139,8 @@ def trash(rt: Runtime, names: list[str]) -> dict:
         raise JyrError(quit_hint(rt))
     index_path = rt.draft_root / INDEX
     index = json.loads(index_path.read_text("utf-8"))
-    folders = {str(rt.draft_root / n) for n in names}
-    missing = [n for n in names if not (rt.draft_root / n).is_dir()]
+    folders = {_norm(rt.folders_dir / n) for n in names}
+    missing = [n for n in names if not (rt.folders_dir / n).is_dir()]
     if missing:
         raise JyrError(f"not found: {missing}")
     backup = backup_index(rt)
@@ -135,12 +148,12 @@ def trash(rt: Runtime, names: list[str]) -> dict:
     bin_dir.mkdir(parents=True)
     kept, removed = [], []
     for e in index.get("all_draft_store", []):
-        (removed if e.get("draft_fold_path") in folders else kept).append(e)
+        (removed if _norm(e.get("draft_fold_path", "")) in folders else kept).append(e)
     index["all_draft_store"] = kept
     (bin_dir / "index_entries.json").write_text(json.dumps(removed, ensure_ascii=False, indent=1))
     atomic_write(index_path, dump(index))
     for n in names:
-        shutil.move(str(rt.draft_root / n), str(bin_dir / n))
+        shutil.move(str(rt.folders_dir / n), str(bin_dir / n))
     return {"moved": len(names), "index_entries_removed": len(removed), "trash": str(bin_dir),
             "index_backup": str(backup)}
 
@@ -156,9 +169,9 @@ def restore(rt: Runtime, bin_dir: Path) -> dict:
     index = json.loads(index_path.read_text("utf-8"))
     for d in bin_dir.iterdir():
         if d.is_dir():
-            if (rt.draft_root / d.name).exists():
+            if (rt.folders_dir / d.name).exists():
                 raise JyrError(f"{d.name} already exists in the project folder")
-            shutil.move(str(d), str(rt.draft_root / d.name))
+            shutil.move(str(d), str(rt.folders_dir / d.name))
     index["all_draft_store"] = entries + index.get("all_draft_store", [])
     atomic_write(index_path, dump(index))
     return {"restored": len(entries)}

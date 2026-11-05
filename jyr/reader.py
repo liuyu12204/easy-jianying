@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import files
 from .runtime import Runtime
 from .srt import to_srt
 from .util import JyrError
@@ -14,17 +15,18 @@ from .writer import read_info, read_meta
 def resolve(rt: Runtime, ref: str) -> Path:
     """A draft by folder path, folder name, or home-screen name."""
     p = Path(ref).expanduser()
-    if p.is_dir() and (p / "draft_info.json").exists():
+    if p.is_dir() and files.info_file(p) is not None:
         return p.resolve()
-    cand = rt.draft_root / ref
-    if (cand / "draft_info.json").exists():
+    cand = rt.folders_dir / ref
+    if files.info_file(cand) is not None:
         return cand
-    hits = [d for d in rt.draft_root.iterdir() if d.is_dir() and ref in d.name and (d / "draft_info.json").exists()]
+    hits = [d for d in rt.folders_dir.iterdir()
+            if d.is_dir() and ref in d.name and files.info_file(d) is not None]
     if len(hits) == 1:
         return hits[0]
     if hits:
         raise JyrError(f"{ref!r} matches several drafts: {[h.name for h in hits][:8]}")
-    raise JyrError(f"no draft named {ref!r} in {rt.draft_root}")
+    raise JyrError(f"no draft named {ref!r} in {rt.folders_dir}")
 
 
 def list_drafts(rt: Runtime) -> list[dict]:

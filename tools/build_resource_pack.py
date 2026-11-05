@@ -24,7 +24,9 @@ usage: python3 tools/build_resource_pack.py [--app jianying|capcut] [--key-value
 """
 import argparse
 import json
+import os
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -39,7 +41,11 @@ APP = args.app
 ROOT = Path(__file__).resolve().parents[1]
 PACK = ROOT / ("jyr/data/resources.json" if APP == "jianying" else f"jyr/data/resources.{APP}.json")
 DEFAULT_SRC = {"jianying": "~/.jyr/catalog.json", "capcut": "~/.jyr/catalog-capcut.json"}[APP]
-USER_DATA = {"jianying": "~/Movies/JianyingPro/User Data", "capcut": "~/Movies/CapCut/User Data"}[APP]
+if sys.platform == "win32":
+    _UD = {"jianying": "$LOCALAPPDATA/JianyingPro/User Data", "capcut": "$LOCALAPPDATA/CapCut/User Data"}[APP]
+    USER_DATA = os.path.expandvars(_UD)
+else:
+    USER_DATA = {"jianying": "~/Movies/JianyingPro/User Data", "capcut": "~/Movies/CapCut/User Data"}[APP]
 SRC = Path(args.source or DEFAULT_SRC).expanduser()
 KV_ROOT = Path(args.key_values or f"{USER_DATA}/Projects/com.lveditor.draft").expanduser()
 OUT = Path(args.out) if args.out else PACK
@@ -49,12 +55,16 @@ DROP = {"icon_url", "preview_cover_url", "request_id", "local_material_id", "con
 def rel(path: str) -> str:
     if path.startswith("@"):
         return path
-    if "/User Data/" in path:
-        return "@userdata/" + path.split("/User Data/", 1)[1]
-    m = re.search(r"\.app/(Contents/.*)$", path)
-    if m:
-        return "@app/" + m.group(1)
-    return ""  # placeholders and anything else: the app resolves by id
+    p = path.replace("\\", "/")
+    if "/User Data/" in p:
+        return "@userdata/" + p.split("/User Data/", 1)[1]
+    m = re.search(r"\.app/(Contents/.*)$", p)  # macOS bundle
+    if not m:
+        m = re.search(r"/\d+\.\d+\.\d+(\.\d+)?/Resources/(.*)$", p)  # Windows <install>/<ver>/Resources
+        if m:
+            return "@app/Contents/Resources/" + m.group(2)
+        return ""  # placeholders and anything else: the app resolves by id
+    return "@app/" + m.group(1)
 
 
 def clean(v):
@@ -62,7 +72,8 @@ def clean(v):
         return {k: clean(x) for k, x in v.items() if k not in DROP}
     if isinstance(v, list):
         return [clean(x) for x in v]
-    if isinstance(v, str) and ("/Users/" in v or v.startswith("##_draftpath")):
+    if isinstance(v, str) and ("/Users/" in v or re.match(r"[A-Za-z]:[/\\]Users[/\\]", v)
+                             or v.startswith("##_draftpath")):
         return rel(v)
     return v
 
@@ -131,7 +142,8 @@ label = {"jianying": "JianYing", "capcut": "CapCut"}[APP]
 note = (f"names and ids of {label} resources; vip false = free (is_vip 0 in {label}'s own key_value.json, or a "
         f"font bundled with {label}), true = paid, null = no record; files are downloaded by {label}")
 blob = json.dumps({"schema": "jyr-resources/2", "app": APP, "note": note, "cards": cards}, ensure_ascii=False, indent=0)
-assert "/Users/" not in blob and "x-signature" not in blob, "private data left in the pack"
+assert "/Users/" not in blob and ":\\Users\\" not in blob and ":/Users/" not in blob \
+    and "x-signature" not in blob, "private data left in the pack"
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(blob)
 counts = defaultdict(int)

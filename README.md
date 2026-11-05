@@ -77,7 +77,9 @@ jyr 生成的草稿是普通的 JSON 文件，剪映和 CapCut 打开后照常�
 | App | 实测版本 | 生成草稿、放到首页 | 读取 / 导字幕 / 改副本 |
 |---|---|:---:|:---:|
 | 剪映专业版（macOS） | 11.7.0 | ✅ | 只限 jyr 自己生成、剪映还没存过的草稿 |
+| 剪映专业版（Windows） | 11.7.0 | ✅ | 只限 jyr 自己生成、剪映还没存过的草稿 |
 | CapCut 国际版（macOS） | 9.4.1 | ✅ | ✅（CapCut 草稿是普通 JSON） |
+| CapCut 国际版（Windows） | 9.1.0 | ✅ | ✅（CapCut 草稿是普通 JSON） |
 
 其他版本没有实测。剪映升级后先跑 `jyr adapt`，再打开一份生成的草稿确认。
 
@@ -99,7 +101,7 @@ CapCut 的资源编号和剪映不完全一样，所以它有自己的资源清�
 
 ## 三分钟上手
 
-**你需要**：Mac + 剪映专业版（或 CapCut）、Python 3.10+、ffmpeg。
+**你需要**：macOS 或 Windows + 剪映专业版（或 CapCut）、Python 3.10+、ffmpeg。
 
 ```bash
 git clone https://github.com/YeJe-cpu/easy-jianying && cd easy-jianying
@@ -153,7 +155,7 @@ jyr build examples/showcase.plan.json --out /tmp/jyr-demo --publish --name "我�
 
 ## 边界（先说清楚）
 
-- **只支持 macOS**：剪映专业版 11.7、CapCut 国际版 9.4.1 在 Intel Mac 上实测。Apple Silicon 理论可行，暂未实测；Windows 未测试。
+- **macOS / Windows**：剪映专业版 11.7（Intel Mac、Windows）、CapCut 国际版 9.4.1（Mac）/ 9.1.0（Windows）实测。Apple Silicon 理论可行，暂未实测。
 - **jyr 只生成草稿文件，不操作剪映 / CapCut 的界面。** 打开、编辑、导出都由你在 App 里完成。
 - **剪映存过的草稿 jyr 不读**：要改就改计划重新生成，或者直接在剪映里改。CapCut 的草稿可以读。
 - **默认只用免费资源**；会员声明 `--member` 才会用到会员资源（见上）。会员功能能不能用、能不能导出，以剪映的规则为准。

@@ -26,8 +26,26 @@ ROOT = Path(__file__).resolve().parents[1]
 TMP = Path(tempfile.mkdtemp(prefix="jyr-capcut-test-"))
 
 
+def bash() -> str:
+    """A real bash. On Windows, plain `bash` may resolve to the WSL shim in
+    System32, which cannot see Git's ffmpeg or Windows paths — prefer Git Bash."""
+    if runtime.IS_WIN:
+        for p in (r"C:\Program Files\Git\bin\bash.exe", r"C:\Program Files (x86)\Git\bin\bash.exe",
+                  str(Path.home() / "AppData/Local/Programs/Git/bin/bash.exe")):
+            if Path(p).exists():
+                return p
+    return "bash"
+
+
 def fake_app(name: str, bundle_id: str, version: str) -> Path:
     app = TMP / "apps" / name
+    if runtime.IS_WIN:
+        exe = {"com.lemon.lvpro": "JianyingPro.exe", "com.lemon.lvoverseas": "CapCut.exe"}.get(
+            bundle_id, "Other.exe")
+        home_dir = app / version
+        home_dir.mkdir(parents=True, exist_ok=True)
+        (home_dir / exe).write_text("fake")
+        return app
     (app / "Contents").mkdir(parents=True, exist_ok=True)
     with open(app / "Contents/Info.plist", "wb") as f:
         plistlib.dump({"CFBundleIdentifier": bundle_id, "CFBundleShortVersionString": version,
@@ -296,7 +314,7 @@ class CapCutResourceTests(unittest.TestCase):
 
     def test_example_plans_build_from_free_builtin_resources_only(self):
         media = TMP / "examples/media"
-        subprocess.run(["bash", str(ROOT / "tools/make_fixtures.sh"), str(media)], check=True, capture_output=True)
+        subprocess.run([bash(), str(ROOT / "tools/make_fixtures.sh"), str(media)], check=True, capture_output=True)
         for plan_name, rt in (("showcase.plan.json", jianying_rt(TMP)), ("capcut.plan.json", capcut_rt(TMP))):
             shutil.copy(ROOT / "examples" / plan_name, TMP / "examples" / plan_name)
             with mock.patch.object(catalog, "CONFIG_DIR", TMP / "no-home"), \

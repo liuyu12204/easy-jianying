@@ -22,13 +22,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import os
+
 from . import files
-from .runtime import CONFIG_DIR, JIANYING, App, Runtime
+from .runtime import CONFIG_DIR, IS_WIN, JIANYING, App, Runtime
 from .util import JyrError
 
 CATALOG_PATH = CONFIG_DIR / "catalog.json"  # JianYing; CapCut has its own (see catalog_path)
 FONT_EXT = {".ttf", ".otf", ".ttc"}
-SYSTEM_FONT_DIRS = [Path("/System/Library/Fonts"), Path("/Library/Fonts"), Path.home() / "Library/Fonts"]
+
+
+def _system_font_dirs() -> list[Path]:
+    if IS_WIN:
+        return [Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Fonts",
+                Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Windows/Fonts"]
+    return [Path("/System/Library/Fonts"), Path("/Library/Fonts"), Path.home() / "Library/Fonts"]
+
+
+SYSTEM_FONT_DIRS = _system_font_dirs()
 
 # material list in draft_info -> catalog kind
 MATERIAL_KINDS = {
@@ -146,7 +157,7 @@ def _has_cjk(path: Path) -> bool | None:
 
 def _local_fonts(rt: Runtime) -> list[dict]:
     fonts = []
-    builtin = rt.app_path / "Contents/Resources/Font"
+    builtin = rt.res_root / "Font"
     for base, cat in [(builtin, "内置字体")] + [(d, "系统字体") for d in SYSTEM_FONT_DIRS]:
         if not base.is_dir():
             continue
@@ -165,17 +176,22 @@ def _local_fonts(rt: Runtime) -> list[dict]:
 def scan(rt: Runtime, draft_root: Path | None = None) -> dict:
     """Learn resources from plain-JSON drafts (CapCut's own drafts, and drafts jyr built).
     Drafts JianYing saved in its own format are skipped and counted as unreadable."""
-    root = Path(draft_root or rt.draft_root)
-    paths = sorted(root.glob("*/draft_info.json"))
+    root = Path(draft_root or rt.folders_dir)
+    folders = files.draft_files(root)
     found: dict[tuple, dict] = {}
     vip: dict[str, bool] = {}
     bad = 0
-    for src, info in files.read_many(paths).items():
+    for folder, src in folders.items():
+        raw = src.read_bytes()
+        try:
+            info = json.loads(raw) if files.is_plain_json(raw) else None
+        except (ValueError, UnicodeDecodeError):
+            info = None
         if info is None:
             bad += 1
             continue
         _harvest(info, found, "CapCut字体" if rt.is_capcut else "剪映字体")
-        for rid, pro in key_value_flags(src.parent).items():
+        for rid, pro in key_value_flags(folder).items():
             vip[rid] = vip.get(rid, False) or pro
     entries = list(found.values())
     seen_paths = {e["path"] for e in entries if e["kind"] == "font"}
@@ -186,8 +202,8 @@ def scan(rt: Runtime, draft_root: Path | None = None) -> dict:
         # True = paid (会员 / Pro), False = free, None = no record. Font files on disk without an id are free.
         e["vip"] = vip.get(e["resource_id"]) if e["resource_id"] else (False if e["kind"] == "font" else None)
     entries.sort(key=lambda e: (e["kind"], -e["seen"], e["name"]))
-    cat = {"app": rt.app.key, "app_version": rt.version, "drafts_scanned": len(paths), "drafts_unreadable": bad,
-           "entries": entries}
+    cat = {"app": rt.app.key, "app_version": rt.version, "drafts_scanned": len(folders),
+           "drafts_unreadable": bad, "entries": entries}
     out = catalog_path(rt)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(cat, ensure_ascii=False, indent=1))
@@ -223,16 +239,19 @@ def load(rt: Runtime | App | None = None) -> dict:
     return data
 
 
-def _resolve(v, app: Path | None, user_data: Path):
+def _resolve(v, res_root: Path | None, user_data: Path):
     if isinstance(v, dict):
-        return {k: _resolve(x, app, user_data) for k, x in v.items()}
+        return {k: _resolve(x, res_root, user_data) for k, x in v.items()}
     if isinstance(v, list):
-        return [_resolve(x, app, user_data) for x in v]
+        return [_resolve(x, res_root, user_data) for x in v]
     if isinstance(v, str):
         if v.startswith("@userdata/"):
             return str(user_data / v[len("@userdata/"):])
-        if v.startswith("@app/") and app is not None:
-            return str(app / v[len("@app/"):])
+        if v.startswith("@app/") and res_root is not None:
+            rel = v[len("@app/"):]
+            if rel.startswith("Contents/Resources/"):
+                rel = rel[len("Contents/Resources/"):]
+            return str(res_root / rel)
     return v
 
 
@@ -244,14 +263,14 @@ def builtin_cards(target: App = JIANYING) -> list[dict]:
     if not pack.is_file():
         return []
     try:
-        from .runtime import find_app
-        app = find_app(target)
+        from .runtime import find_app, resource_dir
+        res_root = resource_dir(find_app(target))
     except JyrError:
-        app = None
+        res_root = None
     cards = []
     for c in json.loads(pack.read_text("utf-8"))["cards"]:
-        e = _resolve(dict(c), app, target.user_data)
-        e["template"] = _resolve(c.get("template", {}), app, target.user_data)
+        e = _resolve(dict(c), res_root, target.user_data)
+        e["template"] = _resolve(c.get("template", {}), res_root, target.user_data)
         e["seen"] = max(1, 1000 - c.get("rank", 999))
         e["source"] = "builtin"
         on_disk = bool(e.get("path")) and Path(e["path"]).exists()
